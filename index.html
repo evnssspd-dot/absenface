@@ -16,9 +16,7 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:'Fredoka',sans-serif;background:var(--bg);color:var(--text)}
 
-/* ============================================================
-   ✅ PERBAIKAN: Area kamera & bingkai wajah TEPAT DI TENGAH
-   ============================================================ */
+/* Area kamera & bingkai tepat di tengah */
 #cameraArea{
   position:relative;
   width:100%;
@@ -50,7 +48,6 @@ body{margin:0;font-family:'Fredoka',sans-serif;background:var(--bg);color:var(--
   animation:pulse 2s ease-in-out infinite;
   z-index:10;
   pointer-events:none;
-  box-shadow:0 0 0 9999px rgba(0,0,0,0.15);
 }
 @keyframes pulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.7;transform:translate(-50%,-50%) scale(1.03)}}
 
@@ -116,18 +113,32 @@ body{margin:0;font-family:'Fredoka',sans-serif;background:var(--bg);color:var(--
 .sync-ok{color:#0d9669;font-size:11px}
 .sync-warn{color:#d97706;font-size:11px}
 .face-list-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);margin-bottom:6px}
-.setting-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.setting-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:16px}
 .setting-item:last-child{border-bottom:none}
 .setting-label{font-size:14px;color:var(--text)}
 .setting-desc{font-size:12px;color:var(--muted);margin-top:2px}
-.time-input{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:monospace;font-size:15px;font-weight:600;cursor:pointer}
+
+/* ✅ Input jam format 24 jam - dipaksa dengan lang & step */
+.time-input{
+  padding:8px 14px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:var(--bg);
+  color:var(--text);
+  font-family:monospace;
+  font-size:16px;
+  font-weight:600;
+  cursor:pointer;
+  min-width:120px;
+  text-align:center;
+}
 .time-input:focus{border-color:var(--accent2);outline:none}
 </style>
 </head>
 <body>
 
 <script>
-var GAS_API_URL = 'GANTI_DENGAN_URL_WEB_APP_GAS_ANDA';
+var GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzSuxxSRQjsypC5-rMPFghq58lQ8u2TeGtXyGNbrHns-vG3KfAO8m2Bpxg1JtkwUm4/exec';
 // URL GAS: https://script.google.com/macros/s/AKfycbzSuxxSRQjsypC5-rMPFghq58lQ8u2TeGtXyGNbrHns-vG3KfAO8m2Bpxg1JtkwUm4/exec
 </script>
 
@@ -147,7 +158,6 @@ var GAS_API_URL = 'GANTI_DENGAN_URL_WEB_APP_GAS_ANDA';
           <h1 style="font-size:28px;font-weight:700;margin:4px 0 0;color:var(--text);">AbsenFace - Scan Wajah</h1>
         </div>
       </div>
-      <!-- ✅ TOMBOL PENGATURAN BARU -->
       <button class="btn-icon" onclick="showSettings()" title="Pengaturan">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -188,7 +198,6 @@ var GAS_API_URL = 'GANTI_DENGAN_URL_WEB_APP_GAS_ANDA';
           </div>
         </div>
 
-        <!-- ✅ Area kamera dengan bingkai yang tepat di tengah -->
         <div id="cameraArea">
           <video id="video" autoplay muted playsinline style="display:none;"></video>
           <div class="face-frame" id="faceFrame" style="display:none;"></div>
@@ -235,7 +244,7 @@ var GAS_API_URL = 'GANTI_DENGAN_URL_WEB_APP_GAS_ANDA';
       <div class="rounded-2xl p-6" style="background:var(--card);border:1px solid var(--border);height:100%;">
         <h2 style="font-size:18px;font-weight:600;margin:0 0 16px;color:var(--text)">📋 Riwayat Terbaru</h2>
         <div id="recentList" style="display:flex;flex-direction:column;gap:10px;max-height:480px;overflow-y:auto;">
-          <p style="color:var(--muted);text-align:center;padding:20px;font-size:14px;">Belum ada absensi</p>
+          <p style="color:var(--muted);text-align:center;padding:20px;font-size:14px;">Memuat data...</p>
         </div>
       </div>
     </div>
@@ -253,7 +262,7 @@ var GAS_API_URL = 'GANTI_DENGAN_URL_WEB_APP_GAS_ANDA';
           </tr>
         </thead>
         <tbody id="tableBody" style="color:var(--text)">
-          <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);">Belum ada data</td></tr>
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);">Memuat data...</td></tr>
         </tbody>
       </table>
     </div>
@@ -270,32 +279,50 @@ var cameraStream = null;
 var todayStr = new Date().toISOString().substring(0, 10);
 var gasWorking = false;
 
-// ===== STORAGE =====
-function getFaces(){try{return JSON.parse(localStorage.getItem('absenface_faces')||'[]')}catch(e){return[]}}
-function saveFaces(f){localStorage.setItem('absenface_faces',JSON.stringify(f))}
-function getAttToday(){try{return JSON.parse(localStorage.getItem('absenface_att_'+todayStr)||'{}')}catch(e){return{}}}
-function saveAttToday(d){localStorage.setItem('absenface_att_'+todayStr,JSON.stringify(d))}
-function getAttList(){try{return JSON.parse(localStorage.getItem('absenface_atlist_'+todayStr)||'[]')}catch(e){return[]}}
-function saveAttList(l){localStorage.setItem('absenface_atlist_'+todayStr,JSON.stringify(l))}
-
-// ✅ PENGATURAN - Jam batas keterlambatan
-function getSettings(){
-  try{
-    return JSON.parse(localStorage.getItem('absenface_settings')||'{}');
-  }catch(e){return{}}
+// ===== STORAGE HELPERS (dengan validasi anti-corrupt) =====
+function safeGet(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    var parsed = JSON.parse(raw);
+    return parsed;
+  } catch(e) {
+    console.warn('Gagal baca localStorage[' + key + ']:', e.message);
+    return fallback;
+  }
 }
+function safeSave(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch(e) {
+    console.warn('Gagal simpan localStorage[' + key + ']:', e.message);
+    return false;
+  }
+}
+
+function getFaces(){ return safeGet('absenface_faces', []); }
+function saveFaces(f){ return safeSave('absenface_faces', f); }
+function getAttToday(){ return safeGet('absenface_att_' + todayStr, {}); }
+function saveAttToday(d){ return safeSave('absenface_att_' + todayStr, d); }
+function getAttList(){ return safeGet('absenface_atlist_' + todayStr, []); }
+function saveAttList(l){ return safeSave('absenface_atlist_' + todayStr, l); }
+
+// ===== PENGATURAN =====
+function getSettings(){ return safeGet('absenface_settings', {}); }
 function saveSettings(s){
-  localStorage.setItem('absenface_settings', JSON.stringify(s));
+  safeSave('absenface_settings', s);
   updateSettingsDisplay();
 }
 function getJamBatas(){
   var s = getSettings();
-  return s.jamBatas || '08:00'; // Default 08:00
+  return s.jamBatas || '08:00';
 }
 function updateSettingsDisplay(){
   document.getElementById('jamBatasBadge').innerHTML = '⏰ Batas terlambat: <strong>' + getJamBatas() + '</strong>';
 }
 
+// ===== VARIABEL DATA =====
 var registeredFaces = getFaces();
 var attendanceToday = getAttToday();
 var attendanceList = getAttList();
@@ -421,8 +448,8 @@ async function startScan() {
     var now = new Date();
     var jam = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
     
-    // ✅ GUNAKAN PENGATURAN JAM BATAS
-    var jamBatas = getJamBatas(); // misal "08:00"
+    // Cek jam batas keterlambatan
+    var jamBatas = getJamBatas();
     var batasParts = jamBatas.split(':');
     var batasAngka = parseInt(batasParts[0]) * 100 + parseInt(batasParts[1]);
     var jamAngka = now.getHours() * 100 + now.getMinutes();
@@ -440,11 +467,11 @@ async function startScan() {
     
     attendanceList.unshift(newRecord);
     saveAttList(attendanceList);
-    refreshUI();
+    refreshUI(); // ✅ UI langsung update dengan data lokal
     
     document.getElementById('scanStatus').textContent = 'Menyimpan...';
     
-    // Kirim ke GAS
+    // Kirim ke GAS (background)
     var gasResult = await callGasAPI('addAttendance', {
       id: match.id, nama: match.nama, kategori: match.kategori, metode: 'Scan Wajah'
     });
@@ -474,17 +501,18 @@ async function startScan() {
       document.getElementById('scanStatus').textContent = '⚠️ Lokal saja';
       document.getElementById('scanStatus').className = 'status-pill status-terlambat';
       
-      showModal('info', '⚠️ Tersimpan di Browser (Belum ke Sheets)', 
+      showModal('info', '⚠️ Tersimpan di Browser', 
         '<div style="text-align:center">' +
         '<div style="font-size:17px;font-weight:600;margin-bottom:6px;">' + match.nama + '</div>' +
         '<div style="color:var(--muted);font-size:13px;margin-bottom:12px;">' + status + ' · ' + jam + '</div>' +
         '<div style="background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.25);border-radius:10px;padding:12px;font-size:12px;color:#d97706;text-align:left;">' +
         '<strong>⚠️ Data belum masuk ke Google Sheets</strong><br>' +
+        'Riwayat tetap muncul di aplikasi (tersimpan lokal).<br>' +
         'Pastikan kode GAS & deploy sudah benar.</div></div>'
       );
     }
     
-    refreshUI();
+    refreshUI(); // Update lagi setelah dapat response GAS
     finishScan();
   }, 2500);
 }
@@ -599,7 +627,7 @@ async function manualAttendance() {
     };
     attendanceList.unshift(newRecord);
     saveAttList(attendanceList);
-    refreshUI();
+    refreshUI(); // ✅ UI langsung update
     
     var r = await callGasAPI('addAttendance', {
       id: person.id, nama: person.nama, kategori: person.kategori, status: status, metode: 'Manual'
@@ -610,24 +638,25 @@ async function manualAttendance() {
   });
 }
 
-// ===== ✅ MENU PENGATURAN BARU =====
+// ===== ✅ PENGATURAN - Input jam format 24 jam =====
 function showSettings() {
   var jamBatas = getJamBatas();
   
   var html = '<div style="display:flex;flex-direction:column;gap:4px;">' +
     
     '<div class="setting-item">' +
-    '<div>' +
+    '<div style="flex:1;">' +
     '<div class="setting-label">⏰ Jam Batas Keterlambatan</div>' +
-    '<div class="setting-desc">Absen yang dilakukan pada atau setelah jam ini akan berstatus <strong style="color:#d97706;">Terlambat</strong>.<br>Sebelum jam ini = status <strong style="color:#0d9669;">Hadir</strong>.</div>' +
+    '<div class="setting-desc">Absen pada atau setelah jam ini = <strong style="color:#d97706;">Terlambat</strong>.<br>Format: <strong>24 jam</strong> (00:00 - 23:59)</div>' +
     '</div>' +
-    '<input type="time" id="settingJamBatas" class="time-input" value="' + jamBatas + '">' +
+    // ✅ Input time dengan lang="id-ID" & step="60" untuk memaksa format 24 jam
+    '<input type="time" id="settingJamBatas" class="time-input" lang="id-ID" step="60" value="' + jamBatas + '">' +
     '</div>' +
     
     '<div class="setting-item">' +
-    '<div>' +
+    '<div style="flex:1;">' +
     '<div class="setting-label">ℹ️ Info</div>' +
-    '<div class="setting-desc">Pengaturan disimpan di browser lokal. Berlaku untuk scan wajah & absen manual.</div>' +
+    '<div class="setting-desc">Pengaturan disimpan di browser. Berlaku untuk scan wajah & absen manual.</div>' +
     '</div>' +
     '<button class="btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="resetSettings()">Reset</button>' +
     '</div>' +
@@ -643,7 +672,7 @@ function showSettings() {
 }
 
 window.resetSettings = function() {
-  if (confirm('Reset pengaturan ke default?\n\nJam batas keterlambatan akan kembali ke 08:00')) {
+  if (confirm('Reset pengaturan ke default?\n\nJam batas keterlambatan: 08:00')) {
     document.getElementById('settingJamBatas').value = '08:00';
   }
 };
@@ -666,7 +695,10 @@ function refreshUI() {
 
 function renderRecent(data) {
   var container = document.getElementById('recentList');
-  if (data.length === 0) { container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px;font-size:14px;">Belum ada absensi hari ini</p>'; return; }
+  if (!data || data.length === 0) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px;font-size:14px;">Belum ada absensi hari ini<br><span style="font-size:11px;">Lakukan scan atau absen manual</span></p>';
+    return;
+  }
   var colors = ['#297a2e','#d97706','#0891b2','#7c3aed','#dc2626','#0d9488'];
   container.innerHTML = data.slice(0, 8).map(function(a) {
     var initials = a.nama.split(' ').map(function(n){return n[0];}).slice(0,2).join('').toUpperCase();
@@ -683,7 +715,10 @@ function renderRecent(data) {
 
 function renderTable(data) {
   var tbody = document.getElementById('tableBody');
-  if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);">Belum ada data</td></tr>'; return; }
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);">Belum ada data absensi hari ini</td></tr>';
+    return;
+  }
   tbody.innerHTML = data.map(function(a, i) {
     var sc = a.status === 'Hadir' ? 'status-hadir' : (a.status === 'Terlambat' ? 'status-terlambat' : 'status-tidakhadir');
     var syncIcon = a.synced ? '<span class="sync-ok">✅ Sheets</span>' : '<span class="sync-warn">⚠️ Lokal</span>';
@@ -740,22 +775,33 @@ function updateApiStatus(ok, msg) {
   else { el.classList.add('mode-warn'); txt.textContent = '⚠️ ' + (msg || 'Mode lokal aktif'); }
 }
 
-// ===== INIT =====
+// ===== ✅ INIT - Diperbaiki agar riwayat selalu muncul =====
 async function init() {
-  updateSettingsDisplay(); // Tampilkan jam batas
+  updateSettingsDisplay();
   
+  // ✅ LANGSUNG muat data dari localStorage & render UI DULU
+  registeredFaces = getFaces();
+  attendanceToday = getAttToday();
+  attendanceList = getAttList();
+  refreshUI(); // UI langsung tampil dengan data lokal
+  
+  // Baru kemudian coba koneksi GAS untuk sync
   var ping = await callGasAPI('ping', {});
   if (ping.success) {
     gasWorking = true;
     updateApiStatus(true);
+    
+    // Sync data wajah dari server
     var rf = await callGasAPI('getFaces', {});
     if (rf.success && rf.data && rf.data.length > 0) {
       var local = getFaces();
       var localIds = local.map(function(f){ return f.id; });
-      rf.data.forEach(function(r){ if (!localIds.includes(r.id)) local.push(r); });
-      saveFaces(local);
-      registeredFaces = local;
+      var updated = false;
+      rf.data.forEach(function(r){ if (!localIds.includes(r.id)) { local.push(r); updated = true; } });
+      if (updated) { saveFaces(local); registeredFaces = local; }
     }
+    
+    // Sync data absensi hari ini dari server
     var att = await callGasAPI('getAttendance', {tanggal: todayStr});
     if (att.success && att.data) {
       attendanceList = att.data.map(function(a){ a.synced = true; return a; });
@@ -765,10 +811,11 @@ async function init() {
       });
       saveAttToday(attendanceToday);
     }
+    
+    refreshUI(); // Update lagi dengan data dari server
   } else {
-    updateApiStatus(false, 'API belum terhubung');
+    updateApiStatus(false, 'Data tersimpan lokal');
   }
-  refreshUI();
 }
 
 init();
