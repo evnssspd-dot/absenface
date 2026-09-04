@@ -16,7 +16,6 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:'Fredoka',sans-serif;background:var(--bg);color:var(--text)}
 
-/* Area kamera & bingkai tepat di tengah */
 #cameraArea{position:relative;width:100%;min-height:340px;background:#0f172a;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center}
 #cameraArea video{display:block;width:100%;height:auto;max-height:420px;object-fit:cover;border-radius:12px}
 .face-frame{position:absolute !important;top:50% !important;left:50% !important;transform:translate(-50%, -50%) !important;width:200px;height:240px;border:2px solid var(--accent);border-radius:50%;animation:pulse 2s ease-in-out infinite;z-index:10;pointer-events:none}
@@ -64,24 +63,26 @@ body{margin:0;font-family:'Fredoka',sans-serif;background:var(--bg);color:var(--
 .setting-item:last-child{border-bottom:none}
 .setting-label{font-size:14px;color:var(--text)}
 .setting-desc{font-size:12px;color:var(--muted);margin-top:2px}
-
-/* ✅ Input jam & menit - PASTI format 24 jam */
 .time-input-group{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .time-num{
-  width:64px;
-  padding:8px 6px;
-  border-radius:8px;
-  border:1px solid var(--border);
-  background:var(--bg);
-  color:var(--text);
-  font-family:monospace;
-  font-size:18px;
-  font-weight:700;
-  text-align:center;
-  cursor:pointer;
+  width:64px;padding:8px 6px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font-family:monospace;font-size:18px;
+  font-weight:700;text-align:center;cursor:pointer;
 }
 .time-num:focus{border-color:var(--accent2);outline:none}
 .time-sep{font-size:20px;font-weight:700;color:var(--accent2)}
+.debug-box{
+  background:rgba(123,168,184,.08);
+  border:1px solid rgba(123,168,184,.25);
+  border-radius:10px;
+  padding:10px 12px;
+  margin-top:12px;
+  text-align:left;
+  font-family:monospace;
+  font-size:11px;
+  color:#0891b2;
+  line-height:1.6;
+}
 </style>
 </head>
 <body>
@@ -124,7 +125,7 @@ var GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzSuxxSRQjsypC5-rMPFg
     
     <div class="sim-banner">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <strong>Mode Simulasi Aktif:</strong> Wajah tidak dikenali AI. Sistem memilih nama dari daftar yang Anda daftarkan. Kamera hanya tampilan visual.
+      <strong>Mode Simulasi Aktif:</strong> Wajah tidak dikenali AI. Sistem memilih nama dari daftar yang Anda daftarkan.
     </div>
   </div>
 
@@ -228,20 +229,26 @@ var cameraStream = null;
 var todayStr = new Date().toISOString().substring(0, 10);
 var gasWorking = false;
 
-// ===== STORAGE HELPERS =====
+// ===== STORAGE HELPERS (dengan try-catch) =====
 function safeGet(key, fallback) {
   try {
     var raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw);
   } catch(e) {
-    console.warn('Gagal baca localStorage[' + key + ']:', e.message);
+    console.warn('⚠️ Gagal baca localStorage[' + key + ']:', e.message);
     return fallback;
   }
 }
 function safeSave(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-  catch(e) { console.warn('Gagal simpan localStorage[' + key + ']:', e.message); return false; }
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    console.log('💾 Tersimpan localStorage[' + key + ']');
+    return true;
+  } catch(e) {
+    console.error('❌ Gagal simpan localStorage[' + key + ']:', e.message);
+    return false;
+  }
 }
 
 function getFaces(){ return safeGet('absenface_faces', []); }
@@ -251,24 +258,37 @@ function saveAttToday(d){ return safeSave('absenface_att_' + todayStr, d); }
 function getAttList(){ return safeGet('absenface_atlist_' + todayStr, []); }
 function saveAttList(l){ return safeSave('absenface_atlist_' + todayStr, l); }
 
-// ===== PENGATURAN - Jam batas keterlambatan =====
+// ===== ✅ PENGATURAN JAM - DENGAN VALIDASI KETAT =====
 function getSettings(){ return safeGet('absenface_settings', {}); }
 function saveSettings(s){
   safeSave('absenface_settings', s);
   updateSettingsDisplay();
 }
+
+// ✅ Ambil jam batas dengan validasi format "HH:MM"
 function getJamBatas(){
   var s = getSettings();
-  return s.jamBatas || '08:00'; // Format "HH:MM"
+  var jb = s.jamBatas;
+  if (!jb || typeof jb !== 'string' || !/^\d{2}:\d{2}$/.test(jb)) {
+    console.warn('⚠️ Format jamBatas tidak valid:', jb, '→ gunakan default 08:00');
+    return '08:00';
+  }
+  return jb;
 }
+
 function updateSettingsDisplay(){
-  document.getElementById('jamBatasBadge').innerHTML = '⏰ Batas terlambat: <strong>' + getJamBatas() + '</strong>';
+  var jb = getJamBatas();
+  document.getElementById('jamBatasBadge').innerHTML = '⏰ Batas terlambat: <strong>' + jb + '</strong>';
 }
 
 // ===== VARIABEL DATA =====
 var registeredFaces = getFaces();
 var attendanceToday = getAttToday();
 var attendanceList = getAttList();
+
+console.log('📋 INIT - attendanceToday:', attendanceToday);
+console.log('📋 INIT - attendanceList:', attendanceList);
+console.log('📋 INIT - jamBatas:', getJamBatas());
 
 // ===== API GAS =====
 function callGasAPI(action, params, timeoutMs) {
@@ -280,13 +300,36 @@ function callGasAPI(action, params, timeoutMs) {
     }).join('&');
     var url = GAS_API_URL + '?action=' + action + '&callback=' + cbName + (query ? '&' + query : '');
     
-    var timer = setTimeout(function() { resolve({success: false, error: 'timeout'}); cleanup(); }, timeoutMs);
-    function cleanup() { delete window[cbName]; var s = document.querySelector('script[data-gas="' + cbName + '"]'); if (s) s.remove(); }
+    console.log('🌐 GAS Request:', action, params);
     
-    window[cbName] = function(data) { clearTimeout(timer); resolve(data); cleanup(); };
+    var timer = setTimeout(function() {
+      console.warn('⚠️ GAS Timeout:', action);
+      resolve({success: false, error: 'timeout'});
+      cleanup();
+    }, timeoutMs);
+    
+    function cleanup() {
+      try { delete window[cbName]; } catch(e) {}
+      var s = document.querySelector('script[data-gas="' + cbName + '"]');
+      if (s) s.remove();
+    }
+    
+    window[cbName] = function(data) {
+      clearTimeout(timer);
+      console.log('✅ GAS Response:', action, data);
+      resolve(data);
+      cleanup();
+    };
+    
     var script = document.createElement('script');
-    script.src = url; script.setAttribute('data-gas', cbName);
-    script.onerror = function() { clearTimeout(timer); resolve({success: false, error: 'script_error'}); cleanup(); };
+    script.src = url;
+    script.setAttribute('data-gas', cbName);
+    script.onerror = function() {
+      clearTimeout(timer);
+      console.warn('⚠️ GAS Script Error:', action);
+      resolve({success: false, error: 'script_error'});
+      cleanup();
+    };
     document.head.appendChild(script);
   });
 }
@@ -343,7 +386,7 @@ function stopCamera() {
   document.getElementById('camStatus').innerHTML = '📷 Kamera: Belum aktif';
 }
 
-// ===== SCAN LOGIC =====
+// ===== ✅ SCAN LOGIC - SUPER ROBUST =====
 async function startScan() {
   if (isScanning) return;
   
@@ -371,7 +414,7 @@ async function startScan() {
     var match = candidates[Math.floor(Math.random() * candidates.length)];
     var akurasi = (95 + Math.random() * 4.9).toFixed(1) + '%';
     
-    // ✅ Validasi: SUDAH ABSEN HARI INI? (cek dari cache lokal)
+    // 1. Cek SUDAH ABSEN?
     if (attendanceToday[match.id]) {
       finishScan();
       document.getElementById('scanStatus').textContent = 'Sudah Absen';
@@ -387,51 +430,71 @@ async function startScan() {
       return;
     }
     
-    // Belum absen → catat
+    // 2. Catat waktu
     var now = new Date();
-    var jam = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    var jamStr = String(now.getHours()).padStart(2,'0') + ':' + 
+                 String(now.getMinutes()).padStart(2,'0') + ':' + 
+                 String(now.getSeconds()).padStart(2,'0');
     
-    // ✅ ✅ CEK JAM BATAS DENGAN PENGATURAN TERBARU
-    var jamBatas = getJamBatas(); // Format "HH:MM"
+    // 3. ✅✅✅ LOGIKA CEK JAM BATAS - DIPERBAIKI & DIDEBUG
+    var jamBatas = getJamBatas(); // "HH:MM"
     var batasParts = jamBatas.split(':');
-    var batasJam = parseInt(batasParts[0], 10);
-    var batasMenit = parseInt(batasParts[1], 10);
-    var batasTotal = batasJam * 60 + batasMenit; // Total menit dari jam 00:00
+    var batasJam = parseInt(batasParts[0], 10);   // ✅ radix 10
+    var batasMenit = parseInt(batasParts[1], 10); // ✅ radix 10
+    var batasTotal = batasJam * 60 + batasMenit;
     
     var jamSekarang = now.getHours();
     var menitSekarang = now.getMinutes();
     var sekarangTotal = jamSekarang * 60 + menitSekarang;
     
-    // ✅ Logika yang BENAR:
-    // Jika sekarang >= batas = TERLAMBAT
-    // Jika sekarang < batas = HADIR
-    var status = sekarangTotal >= batasTotal ? 'Terlambat' : 'Hadir';
+    // Logika: sekarang >= batas = TERLAMBAT, sekarang < batas = HADIR
+    var isTerlambat = sekarangTotal >= batasTotal;
+    var status = isTerlambat ? 'Terlambat' : 'Hadir';
     
-    // Debug info (bisa dihapus jika tidak perlu)
-    console.log('[DEBUG] Jam sekarang:', jam, '→', sekarangTotal, 'menit');
-    console.log('[DEBUG] Batas:', jamBatas, '→', batasTotal, 'menit');
-    console.log('[DEBUG] Status:', status, '(sekarangTotal >= batasTotal =', sekarangTotal >= batasTotal, ')');
+    // Debug info
+    var debugInfo = 
+      'Jam sekarang: ' + jamStr + ' (' + sekarangTotal + ' menit)\n' +
+      'Batas: ' + jamBatas + ' (' + batasTotal + ' menit)\n' +
+      'Logika: ' + sekarangTotal + ' >= ' + batasTotal + ' = ' + isTerlambat + '\n' +
+      '→ Status: ' + status;
     
-    // Simpan ke localStorage
-    attendanceToday[match.id] = {nama: match.nama, jam: jam, status: status};
-    saveAttToday(attendanceToday);
+    console.log('========== DEBUG SCAN ==========');
+    console.log(debugInfo);
+    console.log('================================');
     
-    var newRecord = {
-      id: match.id, nama: match.nama, kategori: match.kategori,
-      kelas: match.kelas || '', jam: jam, status: status,
-      metode: 'Scan Wajah', timestamp: now.toISOString(), synced: false
-    };
-    
-    attendanceList.unshift(newRecord);
-    saveAttList(attendanceList);
-    refreshUI();
+    // 4. ✅ SIMPAN KE LOCAL STORAGE TERLEBIH DAHULU (DIJAMIN)
+    try {
+      attendanceToday[match.id] = {nama: match.nama, jam: jamStr, status: status};
+      saveAttToday(attendanceToday);
+      
+      var newRecord = {
+        id: match.id, nama: match.nama, kategori: match.kategori,
+        kelas: match.kelas || '', jam: jamStr, status: status,
+        metode: 'Scan Wajah', timestamp: now.toISOString(), synced: false
+      };
+      
+      attendanceList.unshift(newRecord);
+      saveAttList(attendanceList);
+      
+      // ✅ LANGSUNG RENDER UI
+      refreshUI();
+      console.log('✅ Data lokal tersimpan & UI di-render');
+    } catch(e) {
+      console.error('❌ Error simpan lokal:', e);
+    }
     
     document.getElementById('scanStatus').textContent = 'Menyimpan...';
     
-    // Kirim ke GAS
-    var gasResult = await callGasAPI('addAttendance', {
-      id: match.id, nama: match.nama, kategori: match.kategori, metode: 'Scan Wajah'
-    });
+    // 5. Kirim ke GAS (background, tidak memblokir UI)
+    var gasResult = {success: false, error: 'not_called'};
+    try {
+      gasResult = await callGasAPI('addAttendance', {
+        id: match.id, nama: match.nama, kategori: match.kategori, metode: 'Scan Wajah'
+      });
+    } catch(e) {
+      console.error('❌ Error GAS:', e);
+      gasResult = {success: false, error: e.message || 'exception'};
+    }
     
     if (gasResult.success) {
       newRecord.synced = true;
@@ -446,26 +509,30 @@ async function startScan() {
         '<div style="text-align:center">' +
         '<div style="font-size:18px;font-weight:600;margin-bottom:6px;">' + match.nama + '</div>' +
         '<div style="color:var(--muted);font-size:13px;margin-bottom:4px;">ID: ' + match.id + '</div>' +
-        '<div style="color:var(--muted);font-size:12px;margin-bottom:12px;">Batas keterlambatan: ' + jamBatas + ' WIB</div>' +
         '<div style="display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:500;margin-bottom:12px;' + 
         (status === 'Terlambat' ? 'background:rgba(217,119,6,.12);color:#d97706;border:1px solid rgba(217,119,6,.25)' : 'background:rgba(13,150,105,.12);color:#0d9669;border:1px solid rgba(13,150,105,.25)') + '">' + 
-        status + ' · ' + jam + '</div>' +
+        status + ' · ' + jamStr + '</div>' +
         '<div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Kecocokan: <strong>' + akurasi + '</strong></div>' +
-        '<div style="font-size:12px;color:#0d9669;">✅ Tersinkron ke Google Sheets</div>' +
+        '<div style="font-size:12px;color:#0d9669;margin-bottom:8px;">✅ Tersinkron ke Google Sheets</div>' +
+        '<div class="debug-box">' + debugInfo.replace(/\n/g, '<br>') + '</div>' +
         '</div>'
       );
     } else {
       document.getElementById('scanStatus').textContent = '⚠️ Lokal saja';
       document.getElementById('scanStatus').className = 'status-pill status-terlambat';
       
-      showModal('info', '⚠️ Tersimpan di Browser', 
+      showModal('info', '⚠️ Tersimpan di Browser Saja', 
         '<div style="text-align:center">' +
         '<div style="font-size:17px;font-weight:600;margin-bottom:6px;">' + match.nama + '</div>' +
-        '<div style="color:var(--muted);font-size:13px;margin-bottom:12px;">' + status + ' · ' + jam + '</div>' +
-        '<div style="background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.25);border-radius:10px;padding:12px;font-size:12px;color:#d97706;text-align:left;">' +
-        '<strong>⚠️ Data belum masuk ke Google Sheets</strong><br>' +
-        'Riwayat tetap muncul di aplikasi (tersimpan lokal).<br>' +
-        'Pastikan kode GAS & deploy sudah benar.</div></div>'
+        '<div style="display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:500;margin-bottom:12px;' + 
+        (status === 'Terlambat' ? 'background:rgba(217,119,6,.12);color:#d97706;border:1px solid rgba(217,119,6,.25)' : 'background:rgba(13,150,105,.12);color:#0d9669;border:1px solid rgba(13,150,105,.25)') + '">' + 
+        status + ' · ' + jamStr + '</div>' +
+        '<div style="background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.25);border-radius:10px;padding:12px;font-size:12px;color:#d97706;text-align:left;margin-bottom:12px;">' +
+        '<strong>⚠️ Belum masuk ke Google Sheets</strong><br>' +
+        'Error: ' + (gasResult.error || 'tidak diketahui') + '<br>' +
+        'Riwayat tetap tersimpan di browser.</div>' +
+        '<div class="debug-box">' + debugInfo.replace(/\n/g, '<br>') + '</div>' +
+        '</div>'
       );
     }
     
@@ -595,21 +662,19 @@ async function manualAttendance() {
   });
 }
 
-// ===== ✅ PENGATURAN - Input jam PASTI 24 jam =====
+// ===== ✅ PENGATURAN - Input jam 2 dropdown (pasti 24 jam) =====
 function showSettings() {
-  var jamBatas = getJamBatas(); // "HH:MM"
+  var jamBatas = getJamBatas();
   var parts = jamBatas.split(':');
   var jamVal = parts[0] || '08';
   var menitVal = parts[1] || '00';
   
-  // Generate opsi jam 00-23
   var jamOptions = '';
   for(var i = 0; i < 24; i++) {
     var val = String(i).padStart(2, '0');
     jamOptions += '<option value="' + val + '"' + (val === jamVal ? ' selected' : '') + '>' + val + '</option>';
   }
   
-  // Generate opsi menit 00-59 (langkah 5)
   var menitOptions = '';
   for(var m = 0; m < 60; m += 5) {
     var val = String(m).padStart(2, '0');
@@ -618,7 +683,6 @@ function showSettings() {
   
   var html = '<div style="display:flex;flex-direction:column;gap:4px;">' +
     
-    // ✅ Input JAM BATAS - DUA SELECT terpisah (PASTI 24 jam)
     '<div class="setting-item">' +
     '<div style="flex:1;">' +
     '<div class="setting-label">⏰ Jam Batas Keterlambatan</div>' +
@@ -631,19 +695,18 @@ function showSettings() {
     '</div>' +
     '</div>' +
     
-    // ✅ Tombol RESET DATA ABSENSI HARI INI
     '<div class="setting-item">' +
     '<div style="flex:1;">' +
     '<div class="setting-label" style="color:#dc2626;">🗑️ Reset Data Absensi Hari Ini</div>' +
-    '<div class="setting-desc">Menghapus semua data absensi hari ini dari <strong>browser lokal</strong>.<br><em style="color:#d97706;">Catatan: Hapus di Google Sheets juga jika perlu.</em></div>' +
+    '<div class="setting-desc">Hapus data absensi hari ini dari <strong>browser lokal</strong>.<br><em style="color:#d97706;">Hapus juga di Google Sheets jika perlu.</em></div>' +
     '</div>' +
     '<button class="btn-danger" style="padding:6px 12px;font-size:12px;white-space:nowrap;" onclick="resetTodayData()">Reset Hari Ini</button>' +
     '</div>' +
     
     '<div class="setting-item" style="border-bottom:none;">' +
     '<div style="flex:1;">' +
-    '<div class="setting-label">ℹ️ Info</div>' +
-    '<div class="setting-desc">Pengaturan disimpan di browser lokal.</div>' +
+    '<div class="setting-label">ℹ️ Default</div>' +
+    '<div class="setting-desc">Kembalikan jam batas ke 08:00.</div>' +
     '</div>' +
     '<button class="btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" onclick="resetAllSettings()">Default</button>' +
     '</div>' +
@@ -654,12 +717,12 @@ function showSettings() {
     var j = document.getElementById('settingJam').value;
     var m = document.getElementById('settingMenit').value;
     var jamBaru = j + ':' + m;
+    console.log('⚙️ Pengaturan disimpan: jamBatas =', jamBaru);
     saveSettings({jamBatas: jamBaru});
     return true;
   });
 }
 
-// ✅ Reset data absensi hari ini (cache lokal)
 window.resetTodayData = function() {
   if (!confirm('Yakin menghapus SEMUA data absensi hari ini dari browser?\n\nData di Google Sheets TIDAK terhapus otomatis.\nJika ingin bersih total, hapus juga baris di Sheets.')) {
     return;
@@ -672,9 +735,8 @@ window.resetTodayData = function() {
   alert('✅ Data absensi hari ini di browser sudah direset.');
 };
 
-// Reset semua pengaturan ke default
 window.resetAllSettings = function() {
-  if (confirm('Reset semua pengaturan ke default?\n\nJam batas: 08:00')) {
+  if (confirm('Reset jam batas ke default 08:00?')) {
     document.getElementById('settingJam').value = '08';
     document.getElementById('settingMenit').value = '00';
   }
@@ -682,18 +744,23 @@ window.resetAllSettings = function() {
 
 // ===== RENDER UI =====
 function refreshUI() {
-  var faces = getFaces().filter(function(f){ return f.kategori === currentTab; });
-  var filtered = attendanceList.filter(function(a){ return a.kategori === currentTab; });
-  var hadir = 0, terlambat = 0;
-  filtered.forEach(function(a){ if(a.status==='Hadir')hadir++; else if(a.status==='Terlambat')terlambat++; });
-  
-  document.getElementById('statHadir').textContent = hadir;
-  document.getElementById('statTerlambat').textContent = terlambat;
-  document.getElementById('statTotal').textContent = faces.length;
-  document.getElementById('statPersen').textContent = faces.length > 0 ? Math.round(((hadir+terlambat)/faces.length)*100) + '%' : '0%';
-  
-  renderRecent(filtered);
-  renderTable(filtered);
+  try {
+    var faces = getFaces().filter(function(f){ return f.kategori === currentTab; });
+    var filtered = (attendanceList || []).filter(function(a){ return a.kategori === currentTab; });
+    var hadir = 0, terlambat = 0;
+    filtered.forEach(function(a){ if(a.status==='Hadir')hadir++; else if(a.status==='Terlambat')terlambat++; });
+    
+    document.getElementById('statHadir').textContent = hadir;
+    document.getElementById('statTerlambat').textContent = terlambat;
+    document.getElementById('statTotal').textContent = faces.length;
+    document.getElementById('statPersen').textContent = faces.length > 0 ? Math.round(((hadir+terlambat)/faces.length)*100) + '%' : '0%';
+    
+    renderRecent(filtered);
+    renderTable(filtered);
+    console.log('🎨 UI di-refresh. Hadir:', hadir, 'Terlambat:', terlambat, 'Total data:', filtered.length);
+  } catch(e) {
+    console.error('❌ Error refreshUI:', e);
+  }
 }
 
 function renderRecent(data) {
@@ -748,7 +815,7 @@ function showModal(type, title, content) {
     '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
   var iconBox = type === 'success' ? '<div class="success-check" style="color:' + ic + ';">' + svg + '</div>' :
     '<div style="text-align:center;margin-bottom:16px;"><div style="width:60px;height:60px;border-radius:50%;background:' + ic + '15;display:flex;align-items:center;justify-content:center;margin:0 auto;color:' + ic + ';">' + svg + '</div></div>';
-  var html = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div style="background:var(--card);border-radius:16px;padding:28px;max-width:420px;width:100%;">' +
+  var html = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div style="background:var(--card);border-radius:16px;padding:28px;max-width:440px;width:100%;">' +
     iconBox + '<h3 style="font-size:18px;font-weight:600;text-align:center;margin:0 0 10px;color:var(--text);">' + title + '</h3>' +
     '<div style="color:var(--text);text-align:center;margin-bottom:20px;">' + content + '</div>' +
     '<button onclick="closeModal()" class="btn-primary" style="width:100%;">Tutup</button></div></div>';
@@ -782,40 +849,44 @@ function updateApiStatus(ok, msg) {
 async function init() {
   updateSettingsDisplay();
   
-  // Load data dari localStorage & render UI DULU
+  // Load data lokal & render UI DULU
   registeredFaces = getFaces();
   attendanceToday = getAttToday();
   attendanceList = getAttList();
   refreshUI();
   
-  // Coba koneksi GAS untuk sync
-  var ping = await callGasAPI('ping', {});
-  if (ping.success) {
-    gasWorking = true;
-    updateApiStatus(true);
-    
-    var rf = await callGasAPI('getFaces', {});
-    if (rf.success && rf.data && rf.data.length > 0) {
-      var local = getFaces();
-      var localIds = local.map(function(f){ return f.id; });
-      var updated = false;
-      rf.data.forEach(function(r){ if (!localIds.includes(r.id)) { local.push(r); updated = true; } });
-      if (updated) { saveFaces(local); registeredFaces = local; }
+  // Coba koneksi GAS
+  try {
+    var ping = await callGasAPI('ping', {});
+    if (ping.success) {
+      gasWorking = true;
+      updateApiStatus(true);
+      
+      var rf = await callGasAPI('getFaces', {});
+      if (rf.success && rf.data && rf.data.length > 0) {
+        var local = getFaces();
+        var localIds = local.map(function(f){ return f.id; });
+        var updated = false;
+        rf.data.forEach(function(r){ if (!localIds.includes(r.id)) { local.push(r); updated = true; } });
+        if (updated) { saveFaces(local); registeredFaces = local; refreshUI(); }
+      }
+      
+      var att = await callGasAPI('getAttendance', {tanggal: todayStr});
+      if (att.success && att.data) {
+        attendanceList = att.data.map(function(a){ a.synced = true; return a; });
+        saveAttList(attendanceList);
+        att.data.forEach(function(a){
+          if (!attendanceToday[a.id]) attendanceToday[a.id] = {nama: a.nama, jam: a.jam, status: a.status};
+        });
+        saveAttToday(attendanceToday);
+        refreshUI();
+      }
+    } else {
+      updateApiStatus(false, 'Data tersimpan lokal');
     }
-    
-    var att = await callGasAPI('getAttendance', {tanggal: todayStr});
-    if (att.success && att.data) {
-      attendanceList = att.data.map(function(a){ a.synced = true; return a; });
-      saveAttList(attendanceList);
-      att.data.forEach(function(a){
-        if (!attendanceToday[a.id]) attendanceToday[a.id] = {nama: a.nama, jam: a.jam, status: a.status};
-      });
-      saveAttToday(attendanceToday);
-    }
-    
-    refreshUI();
-  } else {
-    updateApiStatus(false, 'Data tersimpan lokal');
+  } catch(e) {
+    console.error('❌ Error init GAS:', e);
+    updateApiStatus(false, 'GAGAL koneksi API');
   }
 }
 
